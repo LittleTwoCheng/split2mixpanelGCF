@@ -19,6 +19,7 @@ import com.squareup.okhttp.MediaType;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
 import com.squareup.okhttp.RequestBody;
+import com.squareup.okhttp.Response;
 
 public class Split2MixPanel implements HttpFunction {
 	
@@ -35,7 +36,7 @@ public class Split2MixPanel implements HttpFunction {
 		List<MixPanelEvent> events = new LinkedList<MixPanelEvent>();
         for(Impression impression : impressions) {
         	MixPanelEvent event = new MixPanelEvent();
-        	event.event = "$experiment_started";
+        	event.event = "split_evaluation";
         	event.properties = new HashMap<String, Object>();
         	event.properties.put("Experiment name", impression.split);
         	event.properties.put("Variant name", impression.treatment);
@@ -43,7 +44,7 @@ public class Split2MixPanel implements HttpFunction {
 
         	event.properties.put("split", impression.split);
         	event.properties.put("distinct_id", impression.key);
-        	event.properties.put("token", YOUR_MIXPANEL_TOKEN_HERE);
+        	event.properties.put("token", System.getenv("MIXPANEL_TOKEN"));
         	event.properties.put("time", impression.time / 1000);
         	event.properties.put("treatment", impression.treatment);
         	event.properties.put("label", impression.label);
@@ -59,7 +60,11 @@ public class Split2MixPanel implements HttpFunction {
         Base64 base64 = new Base64();
         String encodedJson = new String(base64.encode(rawJson.getBytes()));
         String body = "data=" + encodedJson;
-        MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+
+		if (System.getenv("VERBOSE") == "1") {
+			body = body + "&verbose=1";
+		}
+		MediaType JSON = MediaType.parse("application/x-www-form-urlencoded; charset=utf-8");
         RequestBody requestBody = RequestBody.create(JSON, body);
         System.out.println("encoded MixPanel events in " + (System.currentTimeMillis() - startMixPanel) + "ms");
         
@@ -69,7 +74,12 @@ public class Split2MixPanel implements HttpFunction {
         		.post(requestBody)
         		.build();
         
-        client.newCall(req).execute();
+		Response apiResponse = client.newCall(req).execute();
+
+		if (System.getenv("VERBOSE") == "1") {
+			System.out.println("Request Event Log: " + rawJson);
+		}
+		System.out.println("POSTed MixPanel. Response Body: " + apiResponse.body().string());
         System.out.println("POSTed MixPanel events in " + (System.currentTimeMillis() - startPost) + "ms");
 
     	PrintWriter writer = new PrintWriter(response.getWriter());
@@ -97,8 +107,6 @@ class MixPanelEvent {
 	public void setProperties(Map<String, Object> properties) {
 		this.properties = properties;
 	}
-	
-	
 }
 
 class Impression {
@@ -275,5 +283,4 @@ class Impression {
 		this.sdkVersion = sdkVersion;
 		this.properties = properties;
 	}
-    
 }
